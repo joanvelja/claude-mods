@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { AgentStatus, EngineInterface, Register, SessionMessage } from 'claude-code'
 
 import type { NowDoingAsk, NowDoingAskMemory, NowDoingCursor, NowDoingSync, NowDoingWorker } from '../types'
-import { askMark, bandRows, oldestFirst } from './band'
+import { askMark, bandRows, HEADER_BG, oldestFirst } from './band'
 import type { Part, View } from './band'
 import {
   applyAsks,
@@ -660,11 +660,10 @@ export const register: Register = on => {
       inputAt: await read($, lastInputAt),
       error: await read($, error),
     }
-    // The card's edges take 2 rows; below 3 rows, or too narrow for its title, it cannot be drawn.
     const width = e.props.bodyColumns
-    if (e.props.maxRows < 3 || width < 24) return next(e)
-    const { title, rows } = bandRows(view, width, e.props.maxRows)
-    if (rows.length === 0 && state === null) return next(e)
+    if (e.props.maxRows < 1 || width < 24) return next(e)
+    const { header, blocks, isSpaced } = bandRows(view, width, e.props.maxRows)
+    if (blocks.length === 0 && state === null && header.right.length === 0) return next(e)
     const { Box, Text } = $.ui.resolve(e)
     const draw = (parts: Part[]) =>
       parts.map(p => (
@@ -672,41 +671,37 @@ export const register: Register = on => {
           {p.text}
         </Text>
       ))
-    // Drawn by hand: a Box border cannot carry a title, so the card is its own four edges.
-    // Ink measures every glyph: the filler and a row's body take what the fixed ends leave.
+    const blank = <Text> </Text>
+    // Ink measures every glyph: a row's body takes what its fixed tail leaves, the mission what the state leaves.
     return (
       <Box flexDirection="column">
-        <Box key="title" width={width} flexDirection="row">
-          <Box flexShrink={0}>
-            <Text>{draw(title.head)}</Text>
+        {isSpaced ? blank : null}
+        <Box key="title" width={width} flexDirection="row" backgroundColor={HEADER_BG}>
+          <Box key="title-left" flexShrink={0}>
+            <Text>{draw(header.left)}</Text>
           </Box>
-          <Box key="title-fill" flexGrow={1} width={0} height={1} overflow="hidden">
-            <Text color="subtle">{'─'.repeat(width)}</Text>
-          </Box>
-          <Box key="title-right" flexShrink={0}>
-            <Text>{draw(title.right)}</Text>
-          </Box>
-          <Box key="title-corner" flexShrink={0}>
-            <Text>{draw([title.corner])}</Text>
+          <Box key="title-right" flexGrow={1} width={0} height={1} overflow="hidden">
+            <Text wrap="truncate-end">{draw(header.right)}</Text>
           </Box>
         </Box>
-        {rows.map(row => (
-          <Box flexDirection="row">
-            <Text color="subtle">│ </Text>
-            <Box key={row.key} width={width - 4} flexDirection="row">
-              <Box flexGrow={1} width={0} height={1} overflow="hidden">
-                <Text wrap="truncate-end">{draw(row.parts)}</Text>
-              </Box>
-              {row.tail ? (
-                <Box flexShrink={0}>
-                  <Text>{draw(row.tail)}</Text>
+        {blocks.map(rows => (
+          <Box flexDirection="column">
+            {isSpaced ? blank : null}
+            {rows.map(row => (
+              <Box key={row.key} width={width} flexDirection="row">
+                <Box flexGrow={1} width={0} height={1} overflow="hidden">
+                  <Text wrap="truncate-end">{draw(row.parts)}</Text>
                 </Box>
-              ) : null}
-            </Box>
-            <Text color="subtle"> │</Text>
+                {row.tail ? (
+                  <Box flexShrink={0}>
+                    <Text>{draw(row.tail)}</Text>
+                  </Box>
+                ) : null}
+              </Box>
+            ))}
           </Box>
         ))}
-        <Text color="subtle">{`╰${'─'.repeat(width - 2)}╯`}</Text>
+        {isSpaced ? blank : null}
       </Box>
     )
   })

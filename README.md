@@ -4,20 +4,21 @@ Claude Code mods (plugins of function hooks) by Joan Velja.
 
 ## now-doing
 
-A briefing card above the prompt for people who run many Claude Code sessions at once and come back to them after a while. One glance tells you whether the session is waiting on you, what it's waiting on, what came out while you were away, and whether its agents are still alive.
+A briefing band above the prompt for people who run many Claude Code sessions at once and come back to them after a while. One glance tells you whether the session is waiting on you, what it's waiting on, what came out while you were away, and whether its agents are still alive.
 
 ```
-╭─ now-doing ─────────────────────────────────── ⏸ 2 open asks · 47m ─╮
-│ mission  Ship the release                                            │
-│ ask      Q2. Tag rc1 now, or wait for the GPU drills?        (3h)    │
-│          #7. Delete the 12 scratch checkouts?                (47m)   │
-│ spend    ⚡ alloc 6841372 · 8h34m left                                │
-│ found    848 passed, 10 known failures · drills blocked: budget out  │
-│ next     tag rc1 → GPU drills → promote to main                      │
-│ plan     ▰▰▱▱▱ 2/5 · tag rc1                                          │
-│ ├ w-lora   fullgraph benches                     active 7m   ●       │
-│ └ w-tree   GPU equivalence run                  ⚠ silent 48m ●       │
-╰──────────────────────────────────────────────────────────────────────╯
+ now-doing  ◆ 2 open asks · 47m   Ship the release                     ← tinted strip
+
+▌ Q2. Tag rc1 now, or wait for the GPU drills?                     3h
+▌ • Delete the 12 scratch checkouts?                              47m
+
+  spend ⚡ alloc 6841372 · 8h34m left
+  found 848 passed, 10 known failures · drills blocked: budget out
+  next  tag rc1 → GPU drills → promote to main
+  plan  ▰▰▱▱▱ 2/5 · tag rc1
+
+  ├ w-lora   fullgraph benches                       ● 2h · active 7m
+  └ w-tree   GPU equivalence run                 ● 3h · ⚠ silent 48m
 ```
 
 ### Install
@@ -32,16 +33,17 @@ Answer `y` to add the marketplace, then pick the user scope. New sessions load i
 
 ### What the card shows
 
-- **The title** shows the session's state: `⏸ waiting on you`, `▶ working`, `⚠ stuck`/`errored` or `✓ done`. It also shows how long it's been in that state and how many asks are open.
-- **mission:** the session's long-running goal. A side request doesn't replace it.
-- **ask:** every question or decision the agent left for you, oldest first. Each keeps the agent's own label (`Q3.`) or a stable number (`#7.`).
+The band is blocks separated by blank rows: a header strip, the asks, progress, and the workers. The strip is tinted with your theme's prompt background.
+
+- **The header** shows the session's state: `◆ waiting on you`, `▸ working`, `▲ stuck`, `✗ errored` or `✓ done`. It also shows how long it's been in that state, how many asks are open, and the mission: the session's long-running goal, which a side request doesn't replace. If the summarizer has stopped or stalled, the reason replaces the mission.
+- **Asks** (yellow bar): every question or decision the agent left for you, oldest first. Each keeps the agent's own label (`Q3.`), or gets a bullet if it had none. Asks older than 30 minutes show their age.
 - **spend:** paid or scarce resources being held right now, such as cluster allocations, cloud VMs or remote shells.
-- **found:** results, numbers and errors since you last sent a prompt.
+- **found:** results, numbers and errors since you last sent a prompt, newest first. A finding restated in other words shows once.
 - **next:** the next steps.
 - **plan:** progress through the session's task list.
 - **The tree:** each subagent and background shell, with its last activity. `⚠ silent` appears after 10 minutes without activity.
 
-The card stays expanded while you type and collapses to the oldest open asks once you send a prompt. It expands again 2 minutes later.
+The band stays expanded while you type. Once you send a prompt or a slash command, it collapses to the header and the open asks for 2 minutes. When rows run short (say, while the prompt grows), the workers give way first, then the blank rows, then progress. Asks give way only to the header.
 
 ### Open asks
 
@@ -91,7 +93,7 @@ An ask stays on the card until you answer it or the agent resolves it itself. It
 
 - **Replay:** the card's prompts were evaluated offline on 22 real "came back after idling" moments from a 16-day research session, with hand-labelled ground truth and 3 samples per point. The final build catches about 80% of open asks at the return, and 0 of 59 accepted closes were wrong.
 - **Experiment:** removing word-matching heuristics from the close checks recovered 12 real answers they had refused, without adding a single wrong close.
-- **Tests:** 183 behaviour specs in `now-doing/tests` (`claude plugin test now-doing`).
+- **Tests:** 185 behaviour specs in `now-doing/tests` (`claude plugin test now-doing`).
 
 ## License
 

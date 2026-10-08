@@ -1,6 +1,6 @@
 {
   "name": "joan-mods",
-  "description": "Claude Code mods by Joan Velja. now-doing: a briefing card above the prompt for people running many sessions at once.",
+  "description": "Claude Code mods by Joan Velja. now-doing: a briefing band above the prompt for people running many sessions at once.",
   "owner": { "name": "Joan Velja" },
   "plugins": [{ "name": "now-doing", "source": "./now-doing" }]
 }

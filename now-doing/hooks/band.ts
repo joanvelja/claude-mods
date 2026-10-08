@@ -1,15 +1,18 @@
-// The band's layout as pure functions: which rows a view yields, in what order,
+// The band's layout as pure functions: which rows a view yields, in which block,
 // and which give way when rows are short. register.tsx turns them into elements.
-import type { NowDoingAsk, NowDoingBrief, NowDoingError, NowDoingPlan, NowDoingWorker, ShownState } from '../types'
+import type { NowDoingAsk, NowDoingBrief, NowDoingError, NowDoingFound, NowDoingPlan, NowDoingWorker, ShownState } from '../types'
 import { clip, duration, isSpendCommand } from './digest'
 
 export const STALL_MS = 600_000
 export const SILENT_MS = 600_000
 
+/** The header strip's tint: the theme's own key for a sent prompt's background, so it follows light and dark themes. */
+export const HEADER_BG = 'userMessageBackground'
+
 export type Color = 'warning' | 'success' | 'error' | 'claude' | 'subtle'
 export type Part = { text: string; bold?: boolean; dim?: boolean; color?: Color }
 /** A row: `parts` from the left, cut at the room left; `tail`, when given, held whole at the right edge. */
-export type Row = { key: string; parts: Part[]; tail?: Part[]; priority: number; order: number }
+export type Row = { key: string; parts: Part[]; tail?: Part[] }
 
 export type View = {
   now: number
@@ -42,103 +45,88 @@ function cut(text: string, width: number): string {
     if (mostCells(`${out + c}…`) > width) break
     out += c
   }
-  return `${out}…`
+  return `${out.trimEnd()}…`
 }
 
-// ── The title edge ──────────────────────────────────────────────────────────
+// ── The header ──────────────────────────────────────────────────────────────
 
+// Glyphs Ink and terminals agree are one cell wide (⏸ ▶ ⚠ are not), so the tint ends at the edge.
 const LOOK: Record<ShownState, { text: string; color: Color }> = {
-  waiting: { text: '⏸ waiting on you', color: 'warning' },
-  working: { text: '▶ working', color: 'claude' },
-  stuck: { text: '⚠ stuck', color: 'error' },
-  errored: { text: '⚠ errored', color: 'error' },
+  waiting: { text: '◆ waiting on you', color: 'warning' },
+  working: { text: '▸ working', color: 'claude' },
+  stuck: { text: '▲ stuck', color: 'error' },
+  errored: { text: '✗ errored', color: 'error' },
   done: { text: '✓ done', color: 'success' },
 }
 
 const OUTCOME_MARK = { ok: '✓', failed: '✗', unknown: '?' } as const
 const MARK_COLOR = { ok: 'success', failed: 'error', unknown: undefined } as const
 
-/**
- * The top border in pieces Ink places one by one: the head, a run of `─` it
- * sizes to what is left, the state's words, and the corner. The corner is
- * its own piece so that a glyph Ink counts wider than the terminal draws it
- * (⏸ ▶ ⚠ ⚡) cannot pull it off the card's right edge.
- */
-export type Title = { head: Part[]; right: Part[]; corner: Part }
+/** The tinted strip: `left` held whole, `right` (the mission, or the summarizer's error) cut to what is left. */
+export type Header = { left: Part[]; right: Part[] }
 
-/** Cells of the border the filler always keeps. */
-const MIN_FILL = 1
+const HEAD: Part[] = [{ text: ' now-doing', color: 'claude', bold: true }]
 
-/**
- * The card's top border: `╭─ now-doing ───── ▶ working · 3m · 2 open asks ─╮`.
- * The open asks are counted in the state's words while waiting, after the
- * time otherwise. What may not fit in `width`, counted at most, leaves in
- * this order: the glyphs, the time, the count, then the state's words are cut.
- */
-export function titleEdge(v: View, width: number, glyphs: Part[]): Title {
-  const head: Part[] = [{ text: '╭─ ', color: 'subtle' }, { text: 'now-doing', color: 'claude' }, { text: ' ', color: 'subtle' }]
-  const corner: Part = { text: ' ─╮', color: 'subtle' }
-  const n = v.openAsks.length
-  const counted = `${n} open ask${n === 1 ? '' : 's'}`
-  const isWaiting = v.state === 'waiting' && n > 0
-  const look = !v.state ? null : isWaiting ? { ...LOOK.waiting, text: `⏸ ${counted}` } : LOOK[v.state]
-  const state: Part[] = look ? [{ text: ' ' }, { text: look.text, color: look.color }] : []
-  const time: Part[] = look ? [{ text: ` · ${duration(v.now - v.stateAt)}`, dim: true }] : []
-  const count: Part[] = look && n > 0 && !isWaiting ? [{ text: ` · ${counted}`, color: 'warning' }] : []
-  const marks: Part[] = glyphs.length ? [{ text: look ? ' · ' : ' ', dim: true }, ...glyphs] : []
-  const mid: Part[][] = [[...state, ...time, ...count, ...marks], [...state, ...time, ...count], [...state, ...count], state]
-  const room = width - mostCellsOf(head) - MIN_FILL - mostCells(corner.text)
-  const fits = mid.find(m => mostCellsOf(m) <= room)
-  const chosen = fits ?? (look && room > 2 ? [{ text: ' ' }, { text: cut(look.text, room - 1), color: look.color }] : [])
-  return { head, right: chosen, corner }
-}
-
-// ── Rows ────────────────────────────────────────────────────────────────────
-
-const LABEL_WIDTH = 7
-
-const labelled = (key: string, label: string, parts: Part[], priority: number, order: number): Row => ({
-  key,
-  parts: [{ text: `${label.padEnd(LABEL_WIDTH)} `, dim: true }, ...parts],
-  priority,
-  order,
-})
-
-function errorRow(v: View): Row | undefined {
+/** The summarizer's trouble, when it should be seen: a stop at once, a stall after STALL_MS. */
+function errorText(v: View): string | undefined {
   const err = v.error
-  if (err?.kind === 'config') return labelled('error', '', [{ text: `⚠ summary stopped: ${err.reason} (/now-doing retries)`, color: 'warning' }], 3, 0)
-  if (err && v.now - err.since >= STALL_MS) {
-    return labelled('error', '', [{ text: `⚠ summary stalled ${duration(v.now - err.since)}: ${err.reason}`, color: 'warning' }], 3, 0)
-  }
+  if (err?.kind === 'config') return `⚠ summary stopped: ${err.reason} (/now-doing retries)`
+  if (err && v.now - err.since >= STALL_MS) return `⚠ summary stalled ${duration(v.now - err.since)}: ${err.reason}`
   return undefined
 }
 
-const COLLAPSED_ASKS = 3
+/**
+ * ` now-doing  ▸ working · 3m · 2 open asks   the mission…`. The open asks
+ * are counted in the state's words while waiting, after the time otherwise.
+ * The mission gives way first; then, counted at most, the glyphs, the time,
+ * the count, and last the state's words are cut.
+ */
+export function header(v: View, width: number, glyphs: Part[]): Header {
+  const n = v.openAsks.length
+  const counted = `${n} open ask${n === 1 ? '' : 's'}`
+  const isWaiting = v.state === 'waiting' && n > 0
+  const look = !v.state ? null : isWaiting ? { ...LOOK.waiting, text: `◆ ${counted}` } : LOOK[v.state]
+  const state: Part[] = look ? [{ text: '  ' }, { text: look.text, color: look.color, bold: true }] : []
+  const time: Part[] = look ? [{ text: ` · ${duration(v.now - v.stateAt)}`, dim: true }] : []
+  const count: Part[] = look && n > 0 && !isWaiting ? [{ text: ` · ${counted}`, color: 'warning' }] : []
+  const marks: Part[] = glyphs.length ? [{ text: look ? ' · ' : '  ', dim: true }, ...glyphs] : []
+  const mid: Part[][] = [[...state, ...time, ...count, ...marks], [...state, ...time, ...count], [...state, ...count], state]
+  const room = width - mostCellsOf(HEAD) - 1
+  const fits = mid.find(m => mostCellsOf(m) <= room)
+  const chosen = fits ?? (look && room > 3 ? [{ text: '  ' }, { text: cut(look.text, room - 2), color: look.color, bold: true }] : [])
+  const err = errorText(v)
+  const right: Part[] = err ? [{ text: '   ' }, { text: err, color: 'warning' }] : v.mission ? [{ text: '   ' }, { text: v.mission, dim: true }] : []
+  return { left: [...HEAD, ...chosen], right }
+}
+
+// ── Asks ────────────────────────────────────────────────────────────────────
+
+/** An ask younger than this shows no age: only the old ones need pointing out. */
 const ASK_AGE_SHOWN_MS = 30 * 60_000
 
-/** An ask's stable mark: the agent's own label when it gave one ("Q3"), else its number ("#7"). */
 /** The agent's own label ("Q3.") when it gave one, else a bullet: the plugin's internal ids mean nothing to the person. */
 export const askMark = (ask: NowDoingAsk) => (ask.label ? `${ask.label}.` : '•')
 
 /** Open asks oldest first: by when they opened, then by id. */
 export const oldestFirst = (asks: readonly NowDoingAsk[]) => [...asks].sort((a, b) => a.askedAt - b.askedAt || Number(a.id.slice(1)) - Number(b.id.slice(1)))
 
-/**
- * Up to `room` open asks, oldest first, each with its stable mark and, when
- * old, its age; when not all fit, the last row counts the newer ones left out.
- */
-
+/** Up to `room` open asks, oldest first, its age at the right; when not all fit, the last counts the newer ones left out. */
 function askRows(v: View, room: number): Row[] {
   const all = oldestFirst(v.openAsks)
   const shown = all.slice(0, Math.max(0, room))
   return shown.map((ask, i) => {
-    const age = v.now - ask.askedAt
-    const parts: Part[] = [{ text: `${askMark(ask)} ${ask.text}`, bold: true }]
-    if (age > ASK_AGE_SHOWN_MS) parts.push({ text: ` (${duration(age)})`, dim: true })
+    const parts: Part[] = [{ text: '▌ ', color: 'warning' }, { text: `${askMark(ask)} ${ask.text}`, bold: true }]
     if (i === shown.length - 1 && all.length > shown.length) parts.push({ text: ` (+${all.length - shown.length} newer)`, dim: true })
-    return labelled(`ask-${i}`, i === 0 ? 'ask' : '', parts, i, 2 + i)
+    const age = v.now - ask.askedAt
+    return { key: `ask-${i}`, parts, ...(age >= ASK_AGE_SHOWN_MS ? { tail: [{ text: `  ${duration(age)}`, dim: true }] } : {}) }
   })
 }
+
+// ── Progress ────────────────────────────────────────────────────────────────
+
+const LABEL_WIDTH = 6
+
+const labelled = (key: string, label: string, parts: Part[]): Row => ({ key, parts: [{ text: `  ${label.padEnd(LABEL_WIDTH)}`, dim: true }, ...parts] })
 
 const runningShells = (v: View) => v.workers.filter(w => w.kind === 'shell' && w.finishedAt === undefined && isSpendCommand(w.command ?? ''))
 
@@ -146,19 +134,39 @@ function spendRow(v: View): Row | undefined {
   const said = v.brief?.spend
   const jobs = runningShells(v).map(w => `${clip(w.description, 40)} ${duration(v.now - w.startedAt)}`)
   const items = [...(said ? [said] : []), ...jobs]
-  if (items.length === 0) return undefined
-  return labelled('spend', 'spend', [{ text: '⚡ ', color: 'warning' }, { text: items.join(' · ') }], 5, 5)
+  return items.length ? labelled('spend', 'spend', [{ text: '⚡ ', color: 'warning' }, { text: items.join(' · ') }]) : undefined
+}
+
+const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}.%$]+/gu) ?? [])
+
+/** Two findings say the same when their word sets overlap by a Jaccard index of at least this. */
+const SAME_FINDING = 0.6
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  let both = 0
+  for (const w of a) if (b.has(w)) both++
+  const either = a.size + b.size - both
+  return either === 0 ? 1 : both / either
+}
+
+/** Newest first, a finding left out when a newer one says the same. */
+export function distinctFindings(found: readonly NowDoingFound[]): NowDoingFound[] {
+  const kept: { f: NowDoingFound; w: Set<string> }[] = []
+  for (const f of [...found].reverse()) {
+    const w = words(f.text)
+    if (!kept.some(k => jaccard(k.w, w) >= SAME_FINDING)) kept.push({ f, w })
+  }
+  return kept.map(k => k.f)
 }
 
 function foundRow(v: View): Row | undefined {
-  const found = (v.brief?.found ?? []).filter(f => v.inputAt === null || f.t > v.inputAt)
-  if (found.length === 0) return undefined
-  return labelled('found', 'found', [{ text: found.map(f => f.text).reverse().join(' · ') }], 6, 6)
+  const found = distinctFindings((v.brief?.found ?? []).filter(f => v.inputAt === null || f.t > v.inputAt))
+  return found.length ? labelled('found', 'found', [{ text: found.map(f => f.text).join(' · ') }]) : undefined
 }
 
-function nextRow(v: View, priority: number): Row | undefined {
+function nextRow(v: View): Row | undefined {
   const next = v.brief?.next ?? []
-  return next.length ? labelled('next', 'next', [{ text: next.join(' → ') }], priority, 7) : undefined
+  return next.length ? labelled('next', 'next', [{ text: next.join(' → ') }]) : undefined
 }
 
 function planRow(v: View): Row | undefined {
@@ -171,10 +179,8 @@ function planRow(v: View): Row | undefined {
     { text: '▱'.repeat(width - filled), dim: true },
     { text: ` ${p.done}/${p.total}` },
     ...(p.current ? [{ text: ` · ${p.current}` }] : []),
-  ], 8, 8)
+  ])
 }
-
-const missionRow = (v: View): Row | undefined => (v.mission ? labelled('mission', 'mission', [{ text: v.mission }], 4, 1) : undefined)
 
 // ── The worker tree ─────────────────────────────────────────────────────────
 
@@ -213,21 +219,21 @@ function treeRows(v: View, room: number): Row[] {
   if (room <= 0 || ordered.length === 0) return []
   const shown = ordered.length > room ? ordered.slice(0, room - 1) : ordered
   const hidden = ordered.slice(shown.length)
-  const labelWidth = Math.min(12, Math.max(...shown.map(s => s.worker.label.length)))
+  const labelWidth = Math.min(12, Math.max(0, ...shown.map(s => s.worker.label.length)))
   const rows: Row[] = shown.map(({ worker, depth }, i) => {
     const isLast = i === shown.length - 1 && hidden.length === 0
-    const left = `${'  '.repeat(depth)}${isLast ? '└' : '├'} ${clip(worker.label, labelWidth).padEnd(labelWidth)}  `
+    const left = `  ${'  '.repeat(depth)}${isLast ? '└' : '├'} ${clip(worker.label, labelWidth).padEnd(labelWidth)}  `
     const said = v.agentNow[worker.id] ?? worker.description
-    return { key: `w-${worker.id}`, parts: [{ text: left, dim: true }, { text: said }], tail: statusParts(worker, v.now), priority: 10 + i, order: 10 + i }
+    return { key: `w-${worker.id}`, parts: [{ text: left, dim: true }, { text: said }], tail: statusParts(worker, v.now) }
   })
   if (hidden.length > 0) {
     const done = hidden.filter(h => h.worker.finishedAt !== undefined).length
-    rows.push({ key: 'more', parts: [{ text: `└ +${hidden.length} more (${done} done)`, dim: true }], priority: 10 + shown.length, order: 10 + shown.length })
+    rows.push({ key: 'more', parts: [{ text: `  └ +${hidden.length} more (${done} done)`, dim: true }] })
   }
   return rows
 }
 
-/** One glyph per worker, for the collapsed title. */
+/** One glyph per worker, for the collapsed header. */
 const glyphParts = (v: View): Part[] =>
   treeOrder(v.workers).map(({ worker }) =>
     worker.finishedAt === undefined
@@ -237,29 +243,41 @@ const glyphParts = (v: View): Part[] =>
 
 // ── The band ────────────────────────────────────────────────────────────────
 
-export type Band = { title: Title; rows: Row[] }
+/** The header, then the non-empty blocks in order (asks, progress, workers); `isSpaced` puts a blank row above, between and below. */
+export type Band = { header: Header; blocks: Row[][]; isSpaced: boolean }
 
-const COLLAPSED_ROWS = 3
+/** Rows a band takes: the header, its blocks, and with spacing a blank above, below and between each two. */
+const rowsOf = (blocks: Row[][], isSpaced: boolean) => {
+  const full = blocks.filter(b => b.length > 0)
+  return 1 + full.reduce((n, b) => n + b.length, 0) + (isSpaced ? full.length + 2 : 0)
+}
 
 /**
- * The card for a view `width` cells wide with `maxRows` rows, its borders
- * included. Rows give way by priority: asks first, then the summarizer's
- * error, mission, spend, found, next, plan and the tree. While the person
- * types it collapses to the asks and mission, or mission and next.
+ * The band for a view `width` cells wide with `maxRows` rows. Asks give way
+ * only to the header. When rows are short the workers go first, then
+ * the spacing, then progress (plan, next, found, spend). Collapsed while the
+ * person has just sent something, it is the header and every ask that fits.
  */
 export function bandRows(v: View, width: number, maxRows: number): Band {
-  const room = maxRows - 2
-  const by = (rows: (Row | undefined)[]) => rows.filter((r): r is Row => r !== undefined).sort((a, b) => a.priority - b.priority)
-  const byOrder = (rows: Row[]) => [...rows].sort((a, b) => a.order - b.order)
-
   if (!v.isExpanded) {
-    // The error row, when there is one, keeps its seat: the asks shown and their "(+k newer)" fit around it.
-    const asks = askRows(v, Math.min(COLLAPSED_ASKS, Math.min(COLLAPSED_ROWS, room) - (errorRow(v) ? 1 : 0)))
-    const rows = by([...asks, errorRow(v), missionRow(v), asks.length ? undefined : nextRow(v, 5)]).slice(0, Math.min(COLLAPSED_ROWS, room))
-    return { title: titleEdge(v, width, glyphParts(v)), rows: byOrder(rows) }
+    const asks = askRows(v, maxRows - 1)
+    const isSpaced = rowsOf([asks], true) <= maxRows
+    return { header: header(v, width, glyphParts(v)), blocks: [asks].filter(b => b.length), isSpaced }
   }
-
-  const asks = askRows(v, room - (errorRow(v) ? 1 : 0))
-  const heads = by([...asks, errorRow(v), missionRow(v), spendRow(v), foundRow(v), nextRow(v, 7), planRow(v)]).slice(0, room)
-  return { title: titleEdge(v, width, []), rows: byOrder([...heads, ...treeRows(v, room - heads.length)]) }
+  const asks = askRows(v, maxRows - 1)
+  const progress = [spendRow(v), foundRow(v), nextRow(v), planRow(v)].filter((r): r is Row => r !== undefined)
+  // Spacing is tried only with every progress row: a blank row never takes the place of a line of content.
+  for (let kept = progress.length; kept >= 0; kept--) {
+    for (const isSpaced of kept === progress.length ? [true, false] : [false]) {
+      const shown = progress.slice(0, kept)
+      // The tree's room: what is left once it is counted as a block of its own (one more spacer).
+      const left = maxRows - rowsOf([asks, shown], isSpaced) - (isSpaced ? 1 : 0)
+      const tree = treeRows(v, left)
+      const blocks = [asks, shown, tree].filter(b => b.length)
+      // Spacing is worth its rows only while it separates something: never blanks in place of every row there is.
+      const isHollow = isSpaced && blocks.length === 0 && progress.length + v.workers.length > 0
+      if (!isHollow && rowsOf(blocks, isSpaced) <= maxRows) return { header: header(v, width, []), blocks, isSpaced }
+    }
+  }
+  return { header: header(v, width, []), blocks: [asks].filter(b => b.length), isSpaced: false }
 }
