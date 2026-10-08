@@ -496,7 +496,7 @@ async function reset($: EngineInterface): Promise<void> {
 /** The open asks as the sync pane shows them above the model's text: exact, not paraphrased by it. */
 function asksMarkdown(open: readonly NowDoingAsk[], now: number): string {
   if (open.length === 0) return ''
-  return ['**Open asks**', ...oldestFirst(open).map(a => `- ${askMark(a)}. ${a.text} (${duration(now - a.askedAt)} ago)`)].join('\n')
+  return ['**Open asks**', ...oldestFirst(open).map(a => `- ${askMark(a)} ${a.text} (${duration(now - a.askedAt)} ago)`)].join('\n')
 }
 
 export const register: Register = on => {
@@ -586,7 +586,7 @@ export const register: Register = on => {
       const now = await $.clock.now()
       const open = oldestFirst(await read($, openAsks))
       if (open.length === 0) return { text: 'No open asks.' }
-      return { text: open.map(a => `${askMark(a)}. ${a.text} (${duration(now - a.askedAt)} ago)\n   "${a.quote}"`).join('\n') }
+      return { text: open.map(a => `${askMark(a)} ${a.text} (${duration(now - a.askedAt)} ago)\n   "${a.quote}"`).join('\n') }
     }
     if (arg === 'off') {
       await update($, isHidden, () => true)

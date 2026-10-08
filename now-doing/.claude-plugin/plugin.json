@@ -1,6 +1,6 @@
 {
   "name": "now-doing",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A briefing card above the prompt: the session's state and how long it has held, its mission, the open asks it is waiting on you for (kept until a quoted reply closes them), what is burning money, what it found since you last sent a prompt, what comes next, plan progress, and each agent with its last activity. `/now-doing asks` lists every open ask; `/now-doing sync` opens the full briefing in a pane. Written by Claude Haiku 5.5 on the session's own credentials.",
   "author": {
     "name": "Joan Velja"

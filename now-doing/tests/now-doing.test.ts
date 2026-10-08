@@ -1441,14 +1441,14 @@ test('Rows: mission, numbered bold asks, spend, found, next and plan, in that or
   const rows = await band($)
   expect(Object.keys(rows)).toEqual(['title', 'mission', 'ask-0', 'ask-1', 'spend', 'found', 'next', 'plan'])
   expect(rows.mission).toBe('mission speed up the trainer step')
-  expect(rows['ask-0']).toBe('ask     #1. Clip off or ~350?')
-  expect(rows['ask-1']).toBe('        #2. Band from 2 to 1?')
+  expect(rows['ask-0']).toBe('ask     • Clip off or ~350?')
+  expect(rows['ask-1']).toBe('        • Band from 2 to 1?')
   expect(rows.spend).toBe('spend   ⚡ alloc 6841372 · 8h34m left')
   expect(rows.next).toBe('next    merge lora → smoke run')
   expect(rows.plan).toBe('plan    ▰▰▱▱▱ 2/5 · task c')
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const texts = await ui.findAll({ type: 'Text' })
-  expect(texts.find(t => t.text === '#1. Clip off or ~350?')?.props.bold).toBe(true)
+  expect(texts.find(t => t.text === '• Clip off or ~350?')?.props.bold).toBe(true)
   expect(texts.find(t => t.text === 'ask     ')?.props.dimColor).toBe(true)
   expect(texts.find(t => t.text === '⏸ 2 open asks')?.props.color).toBe('warning')
   await ui.unmount()
@@ -1468,13 +1468,13 @@ test('Asks outrank every other row when rows are short; the oldest show first an
   await w.clock.advance(2 * MIN)
   const keys = async (maxRows: number) => Object.keys(await band($, { maxRows })).filter(k => k !== 'title')
   expect(await keys(5)).toEqual(['ask-0', 'ask-1', 'ask-2'])
-  expect((await band($, { maxRows: 5 }))['ask-2']).toBe('        #3. Delete the DSV4 shim? (+1 newer)')
+  expect((await band($, { maxRows: 5 }))['ask-2']).toBe('        • Delete the DSV4 shim? (+1 newer)')
   expect(await keys(6)).toEqual(['ask-0', 'ask-1', 'ask-2', 'ask-3'])
   expect(await keys(7)).toEqual(['mission', 'ask-0', 'ask-1', 'ask-2', 'ask-3'])
   expect(await keys(12)).toEqual(['mission', 'ask-0', 'ask-1', 'ask-2', 'ask-3', 'spend', 'found', 'next', 'w-a1'])
   const rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #1. A1 drop router replay?')
-  expect(rows['ask-3']).toBe('        #4. Merge #227 → #232?')
+  expect(rows['ask-0']).toBe('ask     • A1 drop router replay?')
+  expect(rows['ask-3']).toBe('        • Merge #227 → #232?')
   expect(rows.title).toContain('⏸ 4 open asks')
 })
 
@@ -1906,7 +1906,7 @@ test('An open ask persists after its message leaves the window and across briefs
   }
   await turnEnd($)
   await w.clock.settle()
-  expect((await band($))['ask-0']).toContain('1. Merge the stack into release now?')
+  expect((await band($))['ask-0']).toContain('• Merge the stack into release now?')
 })
 
 test('A bare "go" answers the ask of the agent\'s message right before it, once; an older ask needs a reply about it', async ($, on) => {
@@ -1931,7 +1931,7 @@ test('A bare "go" answers the ask of the agent\'s message right before it, once;
   w.reply = () => brief({ closed: [{ id: 'q1', why: 'answered', quote: 'go' }] })
   await w.clock.advance(3 * MIN)
   let rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #1. Ship the canary to 5% now?')
+  expect(rows['ask-0']).toBe('ask     • Ship the canary to 5% now?')
   w.messages = [...w.messages, ask('yes, ship the canary to five percent')]
   await sent($, 'yes, ship the canary to five percent')
   w.reply = () => brief({ closed: [{ id: 'q1', why: 'answered', quote: 'yes, ship the canary to five percent' }] })
@@ -1964,7 +1964,7 @@ for (const [why, quote, line] of notAbout) {
     w.messages = [...w.messages, line]
     w.reply = () => brief({ closed: [{ id: 'q1', why, quote }] })
     await w.clock.advance(MIN)
-    expect((await band($))['ask-0']).toBe('ask     #1. Should the parser keep its pydantic models?')
+    expect((await band($))['ask-0']).toBe('ask     • Should the parser keep its pydantic models?')
   })
 }
 
@@ -1974,7 +1974,7 @@ test('A short ask that ends its message opens ("Go?"); a short fragment from the
   w.reply = () => ok(JSON.stringify({ state: 'waiting', opened: [{ text: 'Go on the plan?', quote: 'Go?' }, { text: 'Schema frozen?', quote: 'Plan is' }], closed: [], found: [], next: [] }))
   await w.clock.advance(5_000)
   const rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #1. Go on the plan?')
+  expect(rows['ask-0']).toBe('ask     • Go on the plan?')
   expect(rows['ask-1']).toBeUndefined()
 })
 
@@ -1994,7 +1994,7 @@ test('The same question opened again under another quote is not a second ask', a
     }))
   await w.clock.advance(5_000)
   const rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #1. Critic contract: optional status field?')
+  expect(rows['ask-0']).toBe('ask     • Critic contract: optional status field?')
   expect(rows['ask-1']).toBeUndefined()
 })
 
@@ -2026,7 +2026,7 @@ for (const [name, close] of [
     await sent($, 'what is the status here, ok?', 'merge the stack into release now, yes')
     w.reply = () => brief({ closed: [close] })
     await w.clock.advance(MIN)
-    expect((await band($))['ask-0']).toBe('ask     #1. Merge the stack into release now?')
+    expect((await band($))['ask-0']).toBe('ask     • Merge the stack into release now?')
   })
 }
 
@@ -2050,7 +2050,7 @@ test('An opened ask whose quote is not in an assistant message is refused, as is
   await w.clock.advance(5_000)
   const rows = await band($)
   expect(Object.keys(rows).filter(k => k.startsWith('ask-'))).toEqual(['ask-0'])
-  expect(rows['ask-0']).toBe('ask     #1. Rotate keys tonight?')
+  expect(rows['ask-0']).toBe('ask     • Rotate keys tonight?')
 })
 
 test('Eight open asks: all show oldest first while rows allow; overflow keeps the oldest and counts the newer; collapsed shows the oldest 3', async ($, on) => {
@@ -2065,17 +2065,17 @@ test('Eight open asks: all show oldest first while rows allow; overflow keeps th
   await w.clock.advance(5_000)
   const all = await band($, { maxRows: 12 })
   expect(Object.keys(all).filter(k => k.startsWith('ask-'))).toHaveLength(8)
-  expect(all['ask-0']).toBe('ask     #1. First question here? (40m)')
-  expect(all['ask-3']).toBe('        #4. Fourth question here?')
-  expect(all['ask-7']).toBe('        #8. Eighth question here?')
+  expect(all['ask-0']).toBe('ask     • First question here? (40m)')
+  expect(all['ask-3']).toBe('        • Fourth question here?')
+  expect(all['ask-7']).toBe('        • Eighth question here?')
   expect(all.title).toContain('⏸ 8 open asks')
   const short = await band($, { maxRows: 7 })
   expect(Object.keys(short).filter(k => k.startsWith('ask-'))).toHaveLength(5)
-  expect(short['ask-4']).toBe('        #5. Fifth question here? (+3 newer)')
+  expect(short['ask-4']).toBe('        • Fifth question here? (+3 newer)')
   await enter($)
   const collapsed = await band($)
   expect(Object.keys(collapsed)).toEqual(['title', 'ask-0', 'ask-1', 'ask-2'])
-  expect(collapsed['ask-2']).toBe('        #3. Third question here? (40m) (+5 newer)')
+  expect(collapsed['ask-2']).toBe('        • Third question here? (40m) (+5 newer)')
 })
 
 test('/now-doing asks lists every open ask, numbered, with its age and the agent\'s own sentence', async ($, on) => {
@@ -2086,7 +2086,7 @@ test('/now-doing asks lists every open ask, numbered, with its age and the agent
   await w.clock.advance(5_000)
   await w.clock.advance(2 * MIN)
   const listed = (await $.command.run({ command: 'now-doing', args: 'asks' } as never)).text
-  expect(listed).toBe(asks.map((a, i) => `#${i + 1}. ${a} (2m ago)\n   "${a}"`).join('\n'))
+  expect(listed).toBe(asks.map((a, i) => `• ${a} (2m ago)\n   "${a}"`).join('\n'))
 })
 
 test('Open asks survive a session.start (a reload re-runs it) and /clear empties them', async ($, on) => {
@@ -2109,7 +2109,7 @@ test('The sync pane lists the open asks above the model\'s text', async ($, on) 
   await w.clock.settle()
   expect(w.syncs[0]!.input).toContain('- [q1] (asked 0s ago) Keep the old index around?')
   const drawn = await pane($)
-  expect(drawn.markdown).toBe('**Open asks**\n- #1. Keep the old index around? (0s ago)\n\nMODEL-SYNC text')
+  expect(drawn.markdown).toBe('**Open asks**\n- • Keep the old index around? (0s ago)\n\nMODEL-SYNC text')
 })
 
 test('Asks opened by different briefs get distinct ids: closing the newer one leaves the older open', async ($, on) => {
@@ -2125,7 +2125,7 @@ test('Asks opened by different briefs get distinct ids: closing the newer one le
   w.reply = () => brief({ closed: [{ id: 'q2', why: 'answered', quote: 'yes, rerun the backfill tonight' }] })
   await w.clock.advance(MIN)
   const rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #1. Keep the old index around?')
+  expect(rows['ask-0']).toBe('ask     • Keep the old index around?')
   expect(rows['ask-1']).toBeUndefined()
 })
 
@@ -2178,7 +2178,7 @@ test('A "withdrawn" close never closes an ask, and the rest of that brief still 
   w.reply = () => brief({ closed: [{ id: 'q1', why: 'withdrawn', quote: 'The pydantic models question no longer applies to the parser.' }], next: ['LANDED next step'] })
   await w.clock.advance(MIN)
   const rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #1. Should the parser keep its pydantic models?')
+  expect(rows['ask-0']).toBe('ask     • Should the parser keep its pydantic models?')
   expect(rows.next).toContain('LANDED next step')
 })
 
@@ -2229,7 +2229,7 @@ test('A blockquote of the ask with an answer closes it even with no shared word 
   w.reply = () => brief({ closed: [{ id: 'q1', why: 'answered', quote: 'nah' }] })
   await w.clock.advance(MIN)
   const rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #2. Ship the canary at noon?')
+  expect(rows['ask-0']).toBe('ask     • Ship the canary at noon?')
 })
 
 test('There is no "done" subcommand: /now-doing asks only lists', async ($, on) => {
@@ -2313,7 +2313,7 @@ test('A message that points at its own list of decisions opens one labelled ask 
   expect(rows['ask-0']).toBe('ask     decision 1. Dedupe cache: raise to 2 GB, or keep 512 MB?')
   expect(rows['ask-1']).toBe('        decision 2. Late rows: drop past 48 h, or keep with a flag?')
   expect(rows['ask-2']).toBe('        decision 3. Ship the v3 schema now, or hold it?')
-  expect(rows['ask-3']).toBe('        #4. Merge the ingest PR as amended?')
+  expect(rows['ask-3']).toBe('        • Merge the ingest PR as amended?')
   // Each item closes on its own number: "decision 2: keep them" answers 2 alone.
   w.messages = [...w.messages, ask('decision 2: keep them with a flag')]
   await sent($, 'decision 2: keep them with a flag')
@@ -2407,7 +2407,7 @@ test('GK1 one bare "go" closes one ask, never a second one on later ticks', asyn
     await w.clock.advance(MIN)
   }
   await w.clock.advance(2 * MIN)
-  expect((await band($))['ask-0']).toBe('ask     #1. Ship the canary to 5% now?')
+  expect((await band($))['ask-0']).toBe('ask     • Ship the canary to 5% now?')
 })
 
 test('GK2 two distinct asks that differ only in a number or id both open', async ($, on) => {
@@ -2609,7 +2609,7 @@ test('T1 a closed ask is not re-opened by quoting part of its sentence from the 
     }))
   await w.clock.advance(3 * MIN)
   const rows = await band($)
-  expect(rows['ask-0']).toBe('ask     #2. Delete the old rc tags?')
+  expect(rows['ask-0']).toBe('ask     • Delete the old rc tags?')
   expect(rows['ask-1']).toBeUndefined()
   expect(w.logs.some(l => l.includes('open "Bump the version to 0.6 before tagging?": closed after the message it quotes'))).toBe(true)
 })
@@ -2695,7 +2695,7 @@ for (const [prompt, quote, closes] of [
     await sent($, prompt)
     w.reply = () => brief({ closed: [{ id: 'q1', why: 'answered', quote }] })
     await w.clock.advance(MIN)
-    expect((await band($))['ask-0']).toBe(closes ? undefined : 'ask     #1. Which region for the replica, Frankfurt or Dublin?')
+    expect((await band($))['ask-0']).toBe(closes ? undefined : 'ask     • Which region for the replica, Frankfurt or Dublin?')
   })
 }
 

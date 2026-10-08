@@ -117,7 +117,8 @@ const COLLAPSED_ASKS = 3
 const ASK_AGE_SHOWN_MS = 30 * 60_000
 
 /** An ask's stable mark: the agent's own label when it gave one ("Q3"), else its number ("#7"). */
-export const askMark = (ask: NowDoingAsk) => (ask.label ? ask.label : `#${ask.id.replace(/^q/, '')}`)
+/** The agent's own label ("Q3.") when it gave one, else a bullet: the plugin's internal ids mean nothing to the person. */
+export const askMark = (ask: NowDoingAsk) => (ask.label ? `${ask.label}.` : '•')
 
 /** Open asks oldest first: by when they opened, then by id. */
 export const oldestFirst = (asks: readonly NowDoingAsk[]) => [...asks].sort((a, b) => a.askedAt - b.askedAt || Number(a.id.slice(1)) - Number(b.id.slice(1)))
@@ -132,7 +133,7 @@ function askRows(v: View, room: number): Row[] {
   const shown = all.slice(0, Math.max(0, room))
   return shown.map((ask, i) => {
     const age = v.now - ask.askedAt
-    const parts: Part[] = [{ text: `${askMark(ask)}. ${ask.text}`, bold: true }]
+    const parts: Part[] = [{ text: `${askMark(ask)} ${ask.text}`, bold: true }]
     if (age > ASK_AGE_SHOWN_MS) parts.push({ text: ` (${duration(age)})`, dim: true })
     if (i === shown.length - 1 && all.length > shown.length) parts.push({ text: ` (+${all.length - shown.length} newer)`, dim: true })
     return labelled(`ask-${i}`, i === 0 ? 'ask' : '', parts, i, 2 + i)
