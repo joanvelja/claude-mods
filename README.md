@@ -36,7 +36,7 @@ Answer `y` to add the marketplace, then pick the user scope. New sessions load i
 The band is blocks separated by blank rows: a header strip, the asks, progress, and the workers. The strip is tinted with your theme's prompt background.
 
 - **The header** shows the session's state: `◆ waiting on you`, `▸ working`, `▲ stuck`, `✗ errored` or `✓ done`. It also shows how long it's been in that state, how many asks are open, and the mission: the session's long-running goal, which a side request doesn't replace. If the summarizer has stopped or stalled, the reason replaces the mission.
-- **Asks** (yellow bar): every question or decision the agent left for you, oldest first. Each keeps the agent's own label (`Q3.`), or gets a bullet if it had none. Asks older than 30 minutes show their age.
+- **Asks** (yellow bar): every question or decision the agent left for you, oldest first. Each keeps the agent's own label (`Q3.`), or gets a bullet if it had none. Each shows its age once it has been open a minute.
 - **spend:** paid or scarce resources being held right now, such as cluster allocations, cloud VMs or remote shells.
 - **found:** results, numbers and errors since you last sent a prompt, newest first. A finding restated in other words shows once.
 - **next:** the next steps.

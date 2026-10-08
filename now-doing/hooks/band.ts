@@ -101,8 +101,8 @@ export function header(v: View, width: number, glyphs: Part[]): Header {
 
 // ── Asks ────────────────────────────────────────────────────────────────────
 
-/** An ask younger than this shows no age: only the old ones need pointing out. */
-const ASK_AGE_SHOWN_MS = 30 * 60_000
+/** An ask younger than this shows no age: "just now" adds nothing. */
+const ASK_AGE_SHOWN_MS = 60_000
 
 /** The agent's own label ("Q3.") when it gave one, else a bullet: the plugin's internal ids mean nothing to the person. */
 export const askMark = (ask: NowDoingAsk) => (ask.label ? `${ask.label}.` : '•')
