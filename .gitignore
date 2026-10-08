@@ -1,0 +1,6 @@
+.claude-plugin/types/
+__pycache__/
+.ruff_cache/
+*.orig
+*.rej
+.DS_Store
