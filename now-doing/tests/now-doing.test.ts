@@ -178,6 +178,17 @@ function gate(answer: () => Reply) {
 
 // ── Specs ───────────────────────────────────────────────────────────────────
 
+test('A slash command the person types collapses the card like a sent prompt', async ($, on) => {
+  on('command.run', () => ({ text: 'reloaded' }))
+  const w = await start($, on)
+  w.reply = r => (isMission(r) ? ok('{"mission": "find why eval acc dropped", "kind": "new"}') : summary('checking the scorer', ['acc 71% → 64% after the refactor']))
+  await submit($, 'find why eval acc dropped after the scorer refactor')
+  await w.clock.advance(2 * MIN + 5_000)
+  expect(Object.keys(await band($))).toEqual(['title', 'mission', 'found', 'next'])
+  await $.command.run({ command: 'reload-plugins', args: '', origin: { kind: 'composer' } } as never)
+  expect(Object.keys(await band($))).toEqual(['title', 'mission', 'next'])
+})
+
 test('T1 sending a prompt collapses the card to mission + next; 2 minutes after the send it expands again', async ($, on) => {
   const w = await start($, on)
   w.reply = r => (isMission(r) ? ok('{"mission": "find why eval acc dropped", "kind": "new"}') : summary('checking the scorer', ['acc 71% → 64% after the refactor']))
@@ -1339,6 +1350,7 @@ test('Title: the state and its time ride the top border, which spans the card ex
   await expectSpans($)
 
   // The turn ends on a question; the re-anchor has not landed: assume waiting.
+  w.messages = [...w.messages, asking('Tag rc1 now, or wait for GPUs?')]
   const held = gate(() => brief({ state: 'waiting', asks: ['Tag rc1 now, or wait for GPUs?'] }))
   w.reply = held.reply
   await turnOver($, 'Both branches pass. Should I tag rc1 now, or wait for GPUs?')
@@ -1348,7 +1360,7 @@ test('Title: the state and its time ride the top border, which spans the card ex
   await expectSpans($)
   held.release()
   await w.clock.settle()
-  expect((await band($)).title).toContain('⏸ waiting on you · 47m')
+  expect((await band($)).title).toContain('⏸ 1 open ask · 47m')
 })
 
 test('Title: a brief written after the turn ended overrides the waiting guess; an errored turn says so; stuck needs a fresh brief', async ($, on) => {
@@ -1410,15 +1422,18 @@ test('Title: a turn that ends without asking, with nothing running, is done; wit
 
 test('Title: what does not fit leaves glyphs, then time, then cuts the words; the border keeps its width', async ($, on) => {
   const w = await start($, on)
-  w.reply = () => brief({ state: 'waiting', asks: ['Merge now?'] })
+  // Before the brief lands, a turn that ended on a question shows the waiting guess.
+  const held = gate(() => brief({ state: 'waiting' }))
+  w.reply = held.reply
   await turnOver($, 'Merge now?')
-  await w.clock.settle()
   await w.clock.advance(5_000)
   for (const columns of [60, 44, 31, 26]) await expectSpans($, columns)
   // Counted at most: "╭─ now-doing " 15, a cell of filler, " ⏸ waiting on you" 18, " · 5s" 6, " ─╮" 5.
   expect((await titleAt($, 45)).right).toBe(' ⏸ waiting on you · 5s')
   expect((await titleAt($, 44)).right).toBe(' ⏸ waiting on you')
   expect((await titleAt($, 31)).right).toBe(' ⏸ wait…')
+  held.release()
+  await w.clock.settle()
 })
 
 test('Rows: mission, numbered bold asks, spend, found, next and plan, in that order', async ($, on) => {

@@ -347,9 +347,11 @@ export function shownState(turn: NowDoingTurn | null, brief: NowDoingBrief | nul
   if (turn?.isRunning) return isFresh && brief.state === 'stuck' ? 'stuck' : 'working'
   if (turn?.isErrored) return 'errored'
   if (openAsks > 0) return 'waiting'
-  if (isFresh || turn === null) return brief?.state ?? null
-  if (turn.isAsking) return 'waiting'
-  return isAnyRunning ? 'working' : 'done'
+  const idle: ShownState = isAnyRunning ? 'working' : 'done'
+  // Once this turn's brief has landed, "waiting on you" needs an open ask to answer.
+  if (isFresh || turn === null) return brief?.state === 'waiting' ? idle : (brief?.state ?? null)
+  // Until it lands, a turn that ended on a question is the best guess.
+  return turn.isAsking ? 'waiting' : idle
 }
 
 // ── Instructions ────────────────────────────────────────────────────────────

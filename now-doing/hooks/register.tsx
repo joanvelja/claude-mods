@@ -575,7 +575,14 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'now-doing' }, async ($, e) => {
+  // One hook for every slash command: a command the person types never reaches prompt.submit but is
+  // input all the same; any command but ours passes on (a hook of ours on `next` would skip our own).
+  on('command.run', async ($, e, next) => {
+    if (e.origin?.kind === 'composer') {
+      await noteInput($)
+      isUrgent = true
+    }
+    if (e.command !== 'now-doing') return next(e)
     const arg = e.args.trim().toLowerCase()
     if (arg === 'sync') {
       const opened = await $.ui.open({ id: SYNC_PANE, title: 'now-doing sync' })
